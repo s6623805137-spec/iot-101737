@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Home IoT Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; text-align: center; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-bottom: 25px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); min-width: 180px; flex: 1; }
+        .card h3 { margin: 0 0 10px 0; color: #555; font-size: 16px; }
+        .value { font-size: 28px; font-weight: bold; color: #007bff; margin: 0; }
+        .control-panel { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .btn-group { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        button { padding: 12px 25px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        button:hover { opacity: 0.85; transform: translateY(-1px); }
+        .btn-on { background-color: #28a745; }
+        .btn-off { background-color: #dc3545; }
+        .btn-auto { background-color: #17a2b8; }
+        .status-bar { font-size: 14px; font-weight: bold; padding: 8px 15px; border-radius: 20px; display: inline-block; margin-bottom: 20px; }
+        .online { background-color: #d4edda; color: #155724; }
+        .offline { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🏠 Smart Home IoT Dashboard</h1>
+        <div id="status" class="status-bar offline">⚡ กำลังเชื่อมต่อ MQTT Broker...</div>
+
+        <!-- การแสดงผลข้อมูลจาก เซ็นเซอร์ (Sensor Data) -->
+        <div class="card-grid">
+            <div class="card">
+                <h3>🌡️ อุณหภูมิ (AHT10)</h3>
+                <p class="value"><span id="temp">--</span> °C</p>
+            </div>
+            <div class="card">
+                <h3>💧 ความชื้น (AHT10)</h3>
+                <p class="value"><span id="hum">--</span> %</p>
+            </div>
+            <div class="card">
+                <h3>☀️ ความสว่าง (BH1750)</h3>
+                <p class="value"><span id="light">--</span> lux</p>
+            </div>
+        </div>
+
+        <!-- การสั่งงาน Relay (Manual & Auto Control) -->
+        <div class="control-panel">
+            <h3>💡 ควบคุมอุปกรณ์ไฟฟ้า (Relay Control)</h3>
+            <p style="color: #666; font-size: 14px;">เลือกสั่งงานด้วยมือ (Manual) หรือสลับเข้าโหมดทำงานอัตโนมัติ (Auto)</p>
+            
+            <div class="btn-group">
+                <button class="btn-on" onclick="sendControl('1')">🟢 สั่งเปิด (Manual ON)</button>
+                <button class="btn-off" onclick="sendControl('0')">🔴 สั่งปิด (Manual OFF)</button>
+                <button class="btn-auto" onclick="sendControl('auto')">🔄 โหมดอัตโนมัติ (Auto Mode)</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const broker = "broker.emqx.io";
+        const port = 8083; 
+        const clientId = "web-client-" + Math.random().toString(16).substr(2, 8);
+        
+        const client = new Paho.MQTT.Client(broker, port, clientId);
+
+        client.onConnectionLost = function(responseObject) {
+            const statusElem = document.getElementById("status");
+            statusElem.innerText = "❌ ขาดการเชื่อมต่อ MQTT";
+            statusElem.className = "status-bar offline";
+        };
+
+        client.onMessageArrived = function(message) {
+            const topic = message.destinationName;
+            const payload = message.payloadString;
+            
+            if (topic === "pkru/iot/temp") document.getElementById("temp").innerText = payload;
+            if (topic === "pkru/iot/hum") document.getElementById("hum").innerText = payload;
+            if (topic === "pkru/iot/light") document.getElementById("light").innerText = payload;
+        };
+
+        client.connect({
+            onSuccess: function() {
+                const statusElem = document.getElementById("status");
+                statusElem.innerText = "🌐 เชื่อมต่อระบบเรียบร้อย (Online)";
+                statusElem.className = "status-bar online";
+                
+                client.subscribe("pkru/iot/temp");
+                client.subscribe("pkru/iot/hum");
+                client.subscribe("pkru/iot/light");
+            }
+        });
+
+        function sendControl(command) {
+            const message = new Paho.MQTT.Message(command);
+            message.destinationName = "pkru/iot/relay";
+            client.send(message);
+        }
+    </script>
+
+</body>
+</html>
